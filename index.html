@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <title>interactive-ml</title>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="index.css">
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.5.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"> </script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.15/lodash.min.js"></script>
+
+
+  <div class="Root">
+    <h1>interactive-ml</h1>
+
+    <div class="Columns">
+      <div class="Column Column-left">
+        <div class="Camera"></div>
+        <div class="CameraPredictions"></div>
+      </div>
+
+      <div class="Column Column-center">
+        <div class="Images">
+          <div class="ImageThumbnails"></div>
+          <div class="ImageProjection"></div>
+        </div>
+        <div class="Texts">
+          <div class="Texts"></div>
+          <div class="TextsProjection"></div>
+        </div>
+      </div>
+
+      <div class="Column Column-Right">
+        <div class="Workspace">
+      </div>
+    </div>
+  </div>
+
+
+  <script type="module">
+    import {main} from './index.js';
+    main();
+  </script>
+</body>

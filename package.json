@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "start": "yarn serve . -p 55555"
+  },
+  "dependencies": {
+    "serve": "^11.3.0"
+  }
+}
