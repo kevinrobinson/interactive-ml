@@ -1,7 +1,7 @@
-const tf = window.tf;
+// const tf = window.tf;
 const _ = window._;
-const mobilenet = window.mobilenet;
-const tmImage = window.tmImage;
+// const mobilenet = window.mobilenet;
+// const tmImage = window.tmImage;
 
 
 function inferMobileNet(tmImageModel, raster) {
@@ -38,6 +38,22 @@ function cropTensor(img) {
   return img.slice([beginHeight, beginWidth, 0], [size, size, 3]);
 }
 
+function renderPredictions(tick, predictionsSnapshots) {
+  const threshold = 0.80;
+  const el = document.querySelector('.CameraPredictions');
+  const texts = _.flatMap(predictionsSnapshots, snapshot => {
+    const {tick, predictions} = snapshot;
+    return _.flatMap(predictions, prediction => {
+      const {className, probability} = prediction;
+      return (probability >= threshold) ? [className] : [];
+    })
+  });
+  el.innerHTML = `<div>
+    <div>tick: ${tick}, snapshots: ${predictionsSnapshots.length}</div>
+    <pre>${texts.join("\n")}</pre>
+  </div>`;
+}
+
 
 async function createWebcam() {
   // webcam has a square ratio and is flipped by default to match training
@@ -50,21 +66,46 @@ async function createWebcam() {
 }
 
 function startLoop(params) {
-  const {webcam} = params;
+  const {
+    webcam,
+    predictor
+  } = params;
 
-  function loop() {
+  let tick = 0;
+  let predictionsSnapshots = [];
+
+  async function loop() {
+    tick += 1;
+
     webcam.update();
+
+    if (tick % 100 === 0) {
+      const imageData = webcam.canvas.getContext('2d').getImageData(0, 0, 400, 300);
+      predictor.postMessage(imageData);
+    }
+    
     requestAnimationFrame(loop);
   }
 
+  // start processes
+  // predictor.addEventListener('error', err => console.log('err:', err));
+  predictor.addEventListener('message', e => {
+    const predictions = e.data;
+    predictionsSnapshots.push({predictions, tick});
+    renderPredictions(tick, predictionsSnapshots);
+  });
   loop();
 }
 
 export async function main() {
-  // const webcam = await createWebcam();
-  // startLoop({webcam});
+  console.log('making...');
+  const predictor = new Worker('predictor.js');
 
-  // const mobileNet = await mobilenet.load();
-  // const predictions = await mobileNet.classify(webcam.canvas);
-  // console.log('predictions', predictions);
+  console.log('okay...');
+  const webcam = await createWebcam();
+
+  startLoop({
+    webcam,
+    predictor
+  });
 }
