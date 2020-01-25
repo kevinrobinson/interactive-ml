@@ -1,3 +1,5 @@
+/* layout */
+
 html {
   display: flex;
   height: 100%;
@@ -10,25 +12,30 @@ body {
   padding: 10px;
 }
 
-h1 {
-  margin: 5px;
-}
-
 .Root {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
+h1 {
+  margin: 5px;
+}
+
 .Columns {
   flex: 1;
   display: flex;
   flex-direction: row;
+  height: 100%;
 }
 
 .Column {
   display: flex;
   flex-direction: column;
+}
+
+.Column-left {
+  width: 400px;
 }
 
 .Column-center {
@@ -42,17 +49,71 @@ h1 {
   background: #333;
 }
 
+
+/* camera */
 .Camera {
   width: 400px;
   height: 300px;
 }
 
+.CameraPredictions {
+  height: 100%;
+  overflow-y: scroll;
+  font-size: 20px;
+}
+
+
+/* images */
 .Images {
+  height: 50%;
   background: #eee;
+  display: flex;
+  flex-direction: row;
+  /*overflow: hidden;*/
+}
+
+.ImageThumbnails {
+  width: 130px;
+  height: 100%;
+  overflow-y: scroll;
+  border-right: 1px solid #ddd;
+  padding-right: 10px;
+}
+
+.ImageThumbnail {
+  margin: 1px;
+}
+
+.ImageProjection {
   flex: 1;
 }
 
+
+
+/* texts */
 .Texts {
+  height: 45%;
   background: #ccc;
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  /*overflow: hidden;*/
+}
+
+.TextsThumbnails {
+  width: 130px;
+  height: 100%;
+  overflow-y: scroll;
+  border-right: 1px solid #bbb;
+  padding-right: 10px;
+}
+
+.Text {
+  font-size: 12px;
+  margin: 2px;
+  color: #333;
+}
+
+.TextsProjection {
   flex: 1;
 }
