@@ -40,16 +40,14 @@ const bounds = [
 function plotText(scatterGL, xys, texts) {
   const points = xys.concat(bounds);
   const metadata = points.map((xy, index) => {
+    const color = (index >= xys.length) ? 'rbga(0,0,0,0)' : '';
     return {
       label: texts[index] || '',
-      isBound: (index >= xys.length)
+      color,
     };
   });
   const dataset = new ScatterGL.Dataset(points, metadata);
-  scatterGL.setPointColorer(i => {
-    const meta = dataset.metadata[i] || {};
-    return (meta.isBound) ? 'none' : '';
-  });
+  scatterGL.setPointColorer(i => dataset.metadata[i].color);
   scatterGL.render(dataset);
 }
 
@@ -68,29 +66,45 @@ function flatTexts(predictions, knobs) {
   return Object.keys(textsMaxProbability);
 }
 
-function renderCameraPredictions(tick, predictionsSnapshots, knobs) {
+function renderCameraPredictions(tick, predictionsSnapshots, selectionTextIndexes, knobs) {
   const {predictionThreshold} = knobs;
   const el = document.querySelector('.CameraPredictions');
   const prediction = _.last(predictionsSnapshots).predictions[0];
   el.innerHTML = `<div>
     <pre>tick: ${tick}, snapshots: ${predictionsSnapshots.length}</pre>
     <pre>${prediction.probability.toFixed(2)}:  ${prediction.className}</pre>
+    <pre>${selectionTextIndexes.join(' ')}</pre>
   </div>`;
 }
 
-function renderTextThumbnails(texts) {
-  const thumbnailsEl = document.querySelector('.TextsThumbnails');
+function renderTextThumbnails(thumbnailsEl, texts, selectionTextIndexes) {
   thumbnailsEl.innerHTML = '';
-  texts.forEach(text => {
+  const indexes = {};
+  texts.forEach((text, index) => indexes[text] = index);
+  _.sortBy(texts).forEach(text => {
+    const index = indexes[text];
     const textEl = document.createElement('div');
     textEl.classList.add('Text');
+    if (selectionTextIndexes.indexOf(index) !== -1) {
+      textEl.classList.add('Text-selected');
+    }
+    textEl.setAttribute('data-index', index);
     textEl.textContent = text;
     thumbnailsEl.appendChild(textEl);
   });
 }
 
+function updateImageThumbnails(thumbnailsEl, imageEls, selectionImageIndexes) {
+  imageEls.forEach((canvasEl, index) => {
+    if (selectionImageIndexes.indexOf(index) === -1) {
+      canvasEl.classList.remove('ImageThumbnail-selected');
+    } else {
+      canvasEl.classList.add('ImageThumbnail-selected');
+    }
+  });
+}
 
-function addImage(tick, imageData, predictions, knobs) {
+function addImage(index, tick, imageData, predictions, knobs) {
   const {scaleThumbnail} = knobs;
   
   // Put raw image data
@@ -100,17 +114,22 @@ function addImage(tick, imageData, predictions, knobs) {
   snapshot.getContext('2d').putImageData(imageData, 0, 0);
 
   // Scale it down
+  const width = Math.round(400 * scaleThumbnail);
+  const height = Math.round(300 * scaleThumbnail);
   const thumbnailEl = document.createElement('canvas');
   thumbnailEl.classList.add('ImageThumbnail');
-  thumbnailEl.width = 40;
-  thumbnailEl.height = 30;
-  thumbnailEl.style.width = Math.round(40) + 'px';
-  thumbnailEl.style.height = Math.round(30) + 'px';
+  thumbnailEl.setAttribute('data-index', index);
+  thumbnailEl.width = width;
+  thumbnailEl.height = height;
+  thumbnailEl.style.width = `${width}px`;
+  thumbnailEl.style.height = `${height}px`;
   const ctx = thumbnailEl.getContext('2d');
-  ctx.drawImage(snapshot, 0, 0, 40, 30);
+  ctx.drawImage(snapshot, 0, 0, width, height);
 
   const thumbnailsEl = document.querySelector('.ImageThumbnails');
   thumbnailsEl.appendChild(thumbnailEl);
+
+  return thumbnailEl;
 }
 
 
@@ -134,21 +153,31 @@ class App {
     this.scatterGL = null;
 
     this.tick = 0;
+    this.images = [];
     this.predictionsSnapshots = [];
     this.texts = [];
     this.textsQueued = {};
+
+    this.selectionTextIndexes = [];
+    this.selectionImageIndexes = [];
 
     this.knobs = {
       initialTicksBeforePrediction: 100,
       ticksPerPrediction: 20,
       predictionThreshold: 0.05,
-      scaleThumbnail: 0.10,
+      scaleThumbnail: 0.15,
       webcamWarmupTicks: 100
     };
+
+    this.textThumbnailsEl = document.querySelector('.TextsThumbnails');
+    this.imageThumbnailsEl = document.querySelector('.ImageThumbnails');
 
     this.loop = this.loop.bind(this);
     this.onTextProjectedMessage = this.onTextProjectedMessage.bind(this);
     this.onPredictionMessage = this.onPredictionMessage.bind(this);   
+    this.onTextScatterClick = this.onTextScatterClick.bind(this);
+    this.onTextThumbnailClicked = this.onTextThumbnailClicked.bind(this);
+    this.onImageThumbnailClicked = this.onImageThumbnailClicked.bind(this);
   }
 
   async start() {
@@ -163,16 +192,19 @@ class App {
     const el = document.querySelector('.TextsProjection');
     this.scatterGL = new ScatterGL(el, {
       showLabelsOnHover: false,
-      onHover: p => console.log('onHover', p),
-      onClick: p => console.log('onClick', p),
-      onSelect: ps => console.log('onSelect', ps)
+      onClick: this.onTextScatterClick,
+      // onHover: this.onTextScatterHover,
+      // onSelect: this.onTextScatterSelect,
     });
     this.scatterGL.setDimensions(2);
     const dataset = new ScatterGL.Dataset([[0,0]]);
     this.scatterGL.render(dataset);
 
+    // event listeners
     this.predictor.addEventListener('message', this.onPredictionMessage);
     this.textProjector.addEventListener('message', this.onTextProjectedMessage);
+    this.textThumbnailsEl.addEventListener('click', this.onTextThumbnailClicked);
+    this.imageThumbnailsEl.addEventListener('click', this.onImageThumbnailClicked);
 
     // kick off main loop
     this.loop();
@@ -184,6 +216,24 @@ class App {
       imageData,
       tick: this.tick
     });
+  }
+
+  onTextThumbnailClicked(e) {
+    const textIndex = parseInt(e.target.dataset.index, 10);
+    this.selectionTextIndexes = [textIndex];
+    this.updateSelection();
+  }
+
+  onImageThumbnailClicked(e) {
+    const imageIndex = parseInt(e.target.dataset.index, 10);
+    console.log('e', e, imageIndex);
+    this.selectionImageIndexes = [imageIndex];
+    this.updateSelection();
+  }
+
+  onTextScatterClick(textIndex) {
+    this.selectionTextIndexes = [textIndex];
+    this.updateSelection();
   }
 
   onTextProjectedMessage(e) {
@@ -204,14 +254,14 @@ class App {
     newTexts.forEach(text => {
       this.texts.push(text);
       this.textsQueued[text] = true;
-      console.log('SEND text', text);
     });
 
-    // update UI
-    renderCameraPredictions(payload.tick, this.predictionsSnapshots, this.knobs);
-    addImage(payload.tick, payload.imageData, payload.predictions, this.knobs);
-    renderTextThumbnails(this.texts);
+    // update UI, track elements, post to text
+    renderCameraPredictions(payload.tick, this.predictionsSnapshots, this.selectionTextIndexes, this.knobs);
+    const thumbnailEl = addImage(this.images.length, payload.tick, payload.imageData, payload.predictions, this.knobs);
+    this.images.push(thumbnailEl);
     this.textProjector.postMessage(this.texts);
+    this.updateSelection();
   }
 
   loop() {
@@ -228,4 +278,15 @@ class App {
     
     requestAnimationFrame(this.loop);
   }
+
+  updateSelection() {
+    renderTextThumbnails(this.textThumbnailsEl, this.texts, this.selectionTextIndexes);
+    updateImageThumbnails(this.imageThumbnailsEl, this.images, this.selectionImageIndexes);
+  }
+}
+
+
+export function main() {
+  const app = new App();
+  app.start();
 }
