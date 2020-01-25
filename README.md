@@ -2,13 +2,16 @@
 make it up as you go
 
 ### ideas
-- flow in images
+x flow in images
+x predict with mobilenet
+x project mobilenet predictions into use / umap (stabilize umap)
+
+- allow one-by-one training, additive only
+  https://www.tensorflow.org/js/guide/train_models
+- see predictions live in windows
 - project into mobilenet / umap (stabilize umap)
 - prune images based on mobilenet embedding similarity
-- predict with mobilenet
-- project mobilenet predictions into use / umap (stabilize umap)
-- allow one-by-one training, additive only
-- see predictions live in windows
+- dragging instead of clicking
 - see library of training examples, edit
 
 ### other ideas

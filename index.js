@@ -94,6 +94,16 @@ function renderTextThumbnails(thumbnailsEl, texts, selectionTextIndexes) {
   });
 }
 
+function updateButtons(selectionImageIndexes) {
+  document.querySelectorAll('.LabelButton').forEach(el => {
+    if (selectionImageIndexes.length === 0) {
+      el.classList.add('LabelButton-disabled');
+    } else {
+      el.classList.remove('LabelButton-disabled');
+    }
+  });
+}
+
 function updateImageThumbnails(thumbnailsEl, imageEls, selectionImageIndexes) {
   imageEls.forEach((canvasEl, index) => {
     if (selectionImageIndexes.indexOf(index) === -1) {
@@ -178,6 +188,7 @@ class App {
     this.onTextScatterClick = this.onTextScatterClick.bind(this);
     this.onTextThumbnailClicked = this.onTextThumbnailClicked.bind(this);
     this.onImageThumbnailClicked = this.onImageThumbnailClicked.bind(this);
+    this.onLabelButtonClicked = this.onLabelButtonClicked.bind(this);
   }
 
   async start() {
@@ -205,7 +216,7 @@ class App {
     this.textProjector.addEventListener('message', this.onTextProjectedMessage);
     this.textThumbnailsEl.addEventListener('click', this.onTextThumbnailClicked);
     this.imageThumbnailsEl.addEventListener('click', this.onImageThumbnailClicked);
-
+    document.querySelector('.Workspace').addEventListener('click', this.onLabelButtonClicked);
     // kick off main loop
     this.loop();
   }
@@ -226,7 +237,6 @@ class App {
 
   onImageThumbnailClicked(e) {
     const imageIndex = parseInt(e.target.dataset.index, 10);
-    console.log('e', e, imageIndex);
     this.selectionImageIndexes = [imageIndex];
     this.updateSelection();
   }
@@ -234,6 +244,14 @@ class App {
   onTextScatterClick(textIndex) {
     this.selectionTextIndexes = [textIndex];
     this.updateSelection();
+  }
+
+  onLabelButtonClicked(e) {
+    const buttonKey = parseInt(e.target.dataset.key, 10);
+    if (!e.target.classList.contains('LabelButton')) return;
+    if (e.target.classList.contains('LabelButton-disabled')) return;
+
+    alert(`added: ${this.selectionImageIndexes.join(' ')} to ${buttonKey}`);
   }
 
   onTextProjectedMessage(e) {
@@ -282,6 +300,7 @@ class App {
   updateSelection() {
     renderTextThumbnails(this.textThumbnailsEl, this.texts, this.selectionTextIndexes);
     updateImageThumbnails(this.imageThumbnailsEl, this.images, this.selectionImageIndexes);
+    updateButtons(this.selectionImageIndexes);
   }
 }
 
