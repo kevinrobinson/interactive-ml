@@ -29,11 +29,27 @@ const _ = window._;
 //   return img.slice([beginHeight, beginWidth, 0], [size, size, 3]);
 // }
 
+// bounds are precomputed with map, so that the
+// scale doesn't jump over time
+const bounds = [
+  [-2.5845954360958383, 5.083864345107571],
+  [1.8873721575352675, 5.083864345107571],
+  [-2.5845954360958383, 0.49011926855316595],
+  [1.8873721575352675, 0.49011926855316595],
+];
 function plotText(scatterGL, xys, texts) {
-  const metadata = xys.map((xy, index) => {
-    return {label: texts[index]};
+  const points = xys.concat(bounds);
+  const metadata = points.map((xy, index) => {
+    return {
+      label: texts[index] || '',
+      isBound: (index >= xys.length)
+    };
   });
-  const dataset = new ScatterGL.Dataset(xys, metadata);
+  const dataset = new ScatterGL.Dataset(points, metadata);
+  scatterGL.setPointColorer(i => {
+    const meta = dataset.metadata[i] || {};
+    return (meta.isBound) ? 'none' : '';
+  });
   scatterGL.render(dataset);
 }
 
@@ -97,9 +113,6 @@ function addImage(tick, imageData, predictions, knobs) {
   thumbnailsEl.appendChild(thumbnailEl);
 }
 
-function addEmbedding(text, embedding) {
-  // console.log('addEmbedding', text, embedding);
-}
 
 
 async function createWebcam() {
@@ -112,98 +125,107 @@ async function createWebcam() {
   return webcam;
 }
 
-function startLoop(params) {
-  const {
-    webcam,
-    predictor,
-    textProjector,
-    scatterGL
-  } = params;
-  const knobs = {
-    predictionThreshold: 0.05,
-    scaleThumbnail: 0.10,
-    webcamWarmupTicks: 200
-  };
-  let sessionTimestamp = (new Date()).getTime();
-  let tick = 0;
-  let predictionsSnapshots = [];
-  let texts = [];
-  let textsQueued = {};
 
-  async function loop() {
-    tick += 1;
+class App {
+  constructor() {
+    this.webcam = null;
+    this.predictor = null;
+    this.textProjector = null;
+    this.scatterGL = null;
 
-    webcam.update();
+    this.tick = 0;
+    this.predictionsSnapshots = [];
+    this.texts = [];
+    this.textsQueued = {};
 
-    if (tick > knobs.webcamWarmupTicks && tick % 50 === 0) {
-      const imageData = webcam.canvas.getContext('2d').getImageData(0, 0, 400, 300);
-      predictor.postMessage({imageData, tick});
-    }
-    
-    requestAnimationFrame(loop);
+    this.knobs = {
+      initialTicksBeforePrediction: 100,
+      ticksPerPrediction: 20,
+      predictionThreshold: 0.05,
+      scaleThumbnail: 0.10,
+      webcamWarmupTicks: 100
+    };
+
+    this.loop = this.loop.bind(this);
+    this.onTextProjectedMessage = this.onTextProjectedMessage.bind(this);
+    this.onPredictionMessage = this.onPredictionMessage.bind(this);   
   }
 
-  // start processes
-  // MobileNet predictor
-  predictor.addEventListener('message', e => {
+  async start() {
+    console.log('spinning up workers...');
+    this.predictor = new Worker('workerPredictor.js');
+    this.textProjector = new Worker('workerTextProjector.js');
+
+    console.log('starting webcam...');
+    this.webcam = await createWebcam();
+
+    console.log('adding projector...')
+    const el = document.querySelector('.TextsProjection');
+    this.scatterGL = new ScatterGL(el, {
+      showLabelsOnHover: false,
+      onHover: p => console.log('onHover', p),
+      onClick: p => console.log('onClick', p),
+      onSelect: ps => console.log('onSelect', ps)
+    });
+    this.scatterGL.setDimensions(2);
+    const dataset = new ScatterGL.Dataset([[0,0]]);
+    this.scatterGL.render(dataset);
+
+    this.predictor.addEventListener('message', this.onPredictionMessage);
+    this.textProjector.addEventListener('message', this.onTextProjectedMessage);
+
+    // kick off main loop
+    this.loop();
+  }
+
+  postImageForPrediction() {
+    const imageData = this.webcam.canvas.getContext('2d').getImageData(0, 0, 400, 300);
+    this.predictor.postMessage({
+      imageData,
+      tick: this.tick
+    });
+  }
+
+  onTextProjectedMessage(e) {
+    const xys = e.data;
+    plotText(this.scatterGL, xys, this.texts);
+  }
+
+  onPredictionMessage(e) {
     const payload = e.data;
-    predictionsSnapshots.push({
+    this.predictionsSnapshots.push({
       predictions: payload.predictions,
       tick: payload.tick
     });
 
     // track what texts we've seen, queue embeddings for new text
-    const predictedTexts = flatTexts(payload.predictions, knobs);
-    const newTexts = predictedTexts.filter(text => textsQueued[text] === undefined);
+    const predictedTexts = flatTexts(payload.predictions, this.knobs);
+    const newTexts = predictedTexts.filter(text => this.textsQueued[text] === undefined);
     newTexts.forEach(text => {
-      texts.push(text);
-      textsQueued[text] = true;
+      this.texts.push(text);
+      this.textsQueued[text] = true;
       console.log('SEND text', text);
     });
 
     // update UI
-    renderCameraPredictions(payload.tick, predictionsSnapshots, knobs);
-    addImage(payload.tick, payload.imageData, payload.predictions, knobs);
-    renderTextThumbnails(texts);
-    textProjector.postMessage(texts);
-  });
+    renderCameraPredictions(payload.tick, this.predictionsSnapshots, this.knobs);
+    addImage(payload.tick, payload.imageData, payload.predictions, this.knobs);
+    renderTextThumbnails(this.texts);
+    this.textProjector.postMessage(this.texts);
+  }
 
-  // Projected text embeddings to UMAP 
-  textProjector.addEventListener('message', e => {
-    const xys = e.data;
-    plotText(scatterGL, xys, texts);
-  });
+  loop() {
+    this.tick += 1;
+    this.webcam.update();
 
-  loop();
-}
-
-export async function main() {
-  console.log('spinning up workers...');
-  const predictor = new Worker('workerPredictor.js');
-  const textProjector = new Worker('workerTextProjector.js');
-  // const workerPrecompute = new Worker('workerPrecompute.js');
-
-  console.log('starting webcam...');
-  const webcam = await createWebcam();
-
-  console.log('adding projector...')
-  const el = document.querySelector('.TextsProjection');
-  const scatterGL = new ScatterGL(el, {
-    onHover: p => console.log('onHover', p),
-    onClick: p => console.log('onClick', p),
-    onSelect: ps => console.log('onSelect', ps)
-  });
-  scatterGL.setDimensions(2);
-  const dataset = new ScatterGL.Dataset([[0,0]]);
-  scatterGL.render(dataset);
-
-  // scatterGL.setTextRenderMode();
-
-  console.log('running loop...');
-  startLoop({
-    webcam,
-    predictor,
-    textProjector,
-    scatterGL
-  });
+    const shouldGrabImage = (
+      (this.tick > this.knobs.initialTicksBeforePrediction) &&
+      (this.tick % this.knobs.ticksPerPrediction === 0)
+    );
+    if (shouldGrabImage) {
+      this.postImageForPrediction();
+    }
+    
+    requestAnimationFrame(this.loop);
+  }
 }

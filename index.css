@@ -9,7 +9,7 @@ body {
   min-width: 1024px;
   flex: 1;
   font-family: Arial;
-  padding: 10px;
+  padding: 5px;
 }
 
 .Root {
@@ -42,6 +42,13 @@ h1 {
   flex: 1;
   margin-left: 30px;
   margin-right: 30px;
+  display: flex;
+  flex-direction: row;
+}
+
+.FullHeight {
+  display: flex;
+  flex-direction: column;
 }
 
 .Column-Right {
@@ -65,11 +72,11 @@ h1 {
 
 /* images */
 .Images {
-  height: 50%;
+  height: 360px;
+  overflow: hidden;
   background: #eee;
   display: flex;
   flex-direction: row;
-  /*overflow: hidden;*/
 }
 
 .ImageThumbnails {
@@ -92,12 +99,12 @@ h1 {
 
 /* texts */
 .Texts {
-  height: 45%;
+  height: 360px;
+  overflow: hidden;
   background: #ccc;
-  flex: 1;
+  border: 2px solid #ccc;
   display: flex;
   flex-direction: row;
-  /*overflow: hidden;*/
 }
 
 .TextsThumbnails {
@@ -116,4 +123,8 @@ h1 {
 
 .TextsProjection {
   flex: 1;
+}
+
+.Workspace {
+  height: 720px;
 }
