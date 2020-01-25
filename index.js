@@ -42,9 +42,12 @@ function flatTexts(predictions, knobs) {
   const textsMaxProbability = {};
   predictions.forEach(prediction => {
     const {className, probability} = prediction;
-    if (probability >= predictionThreshold && probability >= (textsMaxProbability[className] || 0)) {
-      textsMaxProbability[className] = probability;
-    }
+    const texts = className.split(',').map(s => s.trim());
+     texts.forEach(text => {
+      if (probability >= predictionThreshold && probability >= (textsMaxProbability[text] || 0)) {
+        textsMaxProbability[text] = probability;
+      }
+    });
   });
   return Object.keys(textsMaxProbability);
 }
@@ -156,13 +159,13 @@ function startLoop(params) {
       texts.push(text);
       textsQueued[text] = true;
       console.log('SEND text', text);
-      textProjector.postMessage(text);
     });
 
     // update UI
     renderCameraPredictions(payload.tick, predictionsSnapshots, knobs);
     addImage(payload.tick, payload.imageData, payload.predictions, knobs);
     renderTextThumbnails(texts);
+    textProjector.postMessage(texts);
   });
 
   // Projected text embeddings to UMAP 
@@ -178,15 +181,23 @@ export async function main() {
   console.log('spinning up workers...');
   const predictor = new Worker('workerPredictor.js');
   const textProjector = new Worker('workerTextProjector.js');
+  // const workerPrecompute = new Worker('workerPrecompute.js');
 
   console.log('starting webcam...');
   const webcam = await createWebcam();
 
   console.log('adding projector...')
   const el = document.querySelector('.TextsProjection');
-  const scatterGL = new ScatterGL(el);
+  const scatterGL = new ScatterGL(el, {
+    onHover: p => console.log('onHover', p),
+    onClick: p => console.log('onClick', p),
+    onSelect: ps => console.log('onSelect', ps)
+  });
   scatterGL.setDimensions(2);
-  scatterGL.setTextRenderMode();
+  const dataset = new ScatterGL.Dataset([[0,0]]);
+  scatterGL.render(dataset);
+
+  // scatterGL.setTextRenderMode();
 
   console.log('running loop...');
   startLoop({

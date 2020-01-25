@@ -14,3 +14,7 @@ make it up as you go
 ### other ideas
 - do segmentation also, in conjunction with USE
 - https://www.npmjs.com/package/image-augment
+
+
+### offline
+- `conda activate interactive-ml`
